@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ghcp-iac — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --bg-card: #161b22;
+      --bg-code: #1c2128;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --text-bright: #e6edf3;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --green-dim: #238636;
+      --cyan: #79c0ff;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --orange: #e3932b;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      --radius: 8px;
+      --nav-h: 52px;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--cyan); }
+
+    /* ─── TOP NAV ─── */
+    nav {
+      height: var(--nav-h);
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+    .nav-logo {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--green); }
+    .nav-divider { color: var(--border); }
+    .nav-page { font-size: 13px; color: var(--text-dim); }
+    .nav-links { display: flex; gap: 16px; margin-left: auto; align-items: center; }
+    .nav-links a { font-size: 12px; color: var(--text-dim); transition: color .15s; }
+    .nav-links a:hover { color: var(--text-bright); }
+
+    #health-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: default;
+    }
+    #health-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background .3s;
+    }
+    #health-badge.ok #health-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    #health-badge.err #health-dot { background: var(--red); }
+
+    /* ─── BODY LAYOUT ─── */
+    .layout {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-section:last-child { border-bottom: none; flex: 1; overflow-y: auto; }
+
+    .sidebar-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 0 16px 8px;
+    }
+
+    .agent-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 16px;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: background .15s, border-color .15s;
+      user-select: none;
+    }
+    .agent-item:hover { background: rgba(88, 166, 255, 0.06); }
+    .agent-item.active {
+      border-left-color: var(--accent);
+      background: rgba(88, 166, 255, 0.1);
+      color: var(--text-bright);
+    }
+    .agent-icon { font-size: 14px; width: 20px; text-align: center; }
+    .agent-name { font-size: 12px; color: var(--text-dim); }
+    .agent-item.active .agent-name { color: var(--text-bright); }
+
+    /* History list */
+    .history-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: background .15s;
+    }
+    .history-item:hover { background: rgba(255,255,255,0.03); }
+    .history-item.active { border-left-color: var(--accent); background: rgba(88,166,255,0.07); }
+    .history-agent {
+      font-size: 11px;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .history-prompt {
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .history-time {
+      font-size: 10px;
+      color: var(--border);
+      margin-top: 2px;
+    }
+    .history-empty {
+      padding: 12px 16px;
+      font-size: 11px;
+      color: var(--border);
+      font-style: italic;
+    }
+
+    /* ─── MAIN PANEL ─── */
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── TOOLBAR ─── */
+    .toolbar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      flex-shrink: 0;
+    }
+    .toolbar-agent {
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .toolbar-agent span { color: var(--accent); }
+    .toolbar textarea {
+      flex: 1;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-bright);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 12px;
+      resize: none;
+      height: 38px;
+      line-height: 1.5;
+      outline: none;
+      transition: border-color .2s;
+      overflow: hidden;
+    }
+    .toolbar textarea:focus { border-color: var(--accent); }
+    .toolbar textarea::placeholder { color: var(--text-dim); }
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      border: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-run {
+      background: var(--green-dim);
+      color: var(--text-bright);
+      border: 1px solid var(--green);
+    }
+    .btn-run:hover:not(:disabled) { background: var(--green); }
+    .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-clear {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-clear:hover { border-color: var(--text-dim); color: var(--text-bright); }
+
+    /* ─── OUTPUT ─── */
+    .output-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .output-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      color: var(--text-dim);
+    }
+    .output-placeholder .ph-icon { font-size: 32px; }
+    .output-placeholder p { font-size: 13px; }
+    .output-placeholder .ph-hint { font-size: 11px; color: var(--border); }
+
+    #output {
+      max-width: 860px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ─── MARKDOWN RENDERING ─── */
+    .md-body { font-family: var(--sans); font-size: 14px; line-height: 1.7; color: var(--text); }
+    .md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+      font-family: var(--mono);
+      color: var(--text-bright);
+      margin: 1.2em 0 0.5em;
+      line-height: 1.3;
+    }
+    .md-body h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .md-body h2 { font-size: 17px; }
+    .md-body h3 { font-size: 15px; color: var(--cyan); }
+    .md-body h4 { font-size: 13px; color: var(--text-dim); }
+    .md-body p { margin-bottom: 0.8em; }
+    .md-body ul, .md-body ol { padding-left: 1.4em; margin-bottom: 0.8em; }
+    .md-body li { margin-bottom: 0.3em; }
+    .md-body code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--cyan);
+    }
+    .md-body pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin-bottom: 1em;
+    }
+    .md-body pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .md-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1em;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .md-body th {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      text-align: left;
+      color: var(--text-bright);
+      font-weight: 700;
+    }
+    .md-body td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .md-body tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .md-body tr:hover td { background: rgba(88,166,255,0.05); }
+    .md-body blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 12px;
+      color: var(--text-dim);
+      margin-bottom: 0.8em;
+    }
+    .md-body strong { color: var(--text-bright); }
+    .md-body em { color: var(--text-dim); }
+    .md-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+
+    /* Emoji severity colouring */
+    .md-body p:has(> strong:first-child) { }
+
+    /* ─── STATUS BAR ─── */
+    .status-bar {
+      height: 28px;
+      background: var(--bg-code);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .status-item .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+    .status-item.running .dot { background: var(--yellow); animation: pulse .8s ease-in-out infinite alternate; }
+    .status-item.done .dot { background: var(--green); }
+    .status-item.err .dot { background: var(--red); }
+
+    @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+    /* ─── STREAMING CURSOR ─── */
+    .stream-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--green);
+      vertical-align: middle;
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ─── TABLE PAGINATION ─── */
+    .pg-wrap { margin-bottom: 1em; }
+    .pg-wrap table { margin-bottom: 0 !important; }
+    .pg-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 7px 10px;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    .pg-info { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+    .pg-controls { display: flex; align-items: center; gap: 6px; }
+    .pg-pages {
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      min-width: 76px;
+      text-align: center;
+    }
+    .pg-btn {
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .pg-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-bright); }
+    .pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .pg-size {
+      padding: 2px 4px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      outline: none;
+    }
+    .pg-size:focus { border-color: var(--accent); }
+
+    /* ─── CHART PANEL ─── */
+    #chart-panel {
+      display: none;
+      max-width: 860px;
+      margin: 0 auto 20px;
+      width: 100%;
+    }
+    .chart-panel-inner {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .chart-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-code);
+    }
+    .chart-panel-header span {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-dim);
+    }
+    .chart-panel-title { color: var(--text-bright) !important; }
+    .chart-body {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+    /* stat cards column */
+    .chart-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-width: 150px;
+      border-right: 1px solid var(--border);
+    }
+    .chart-stat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .chart-stat:last-child { border-bottom: none; }
+    .chart-stat:hover { background: rgba(255,255,255,0.03); }
+    .chart-stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .chart-stat-val.red   { color: var(--red); }
+    .chart-stat-val.yellow { color: var(--yellow); }
+    .chart-stat-val.orange { color: var(--orange); }
+    .chart-stat-val.green  { color: var(--green); }
+    .chart-stat-val.accent { color: var(--accent); }
+    .chart-stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    /* charts area */
+    .chart-canvases {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 16px 20px;
+      gap: 16px;
+      min-height: 180px;
+    }
+    .chart-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .chart-wrap label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .chart-wrap canvas { max-height: 150px; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 700px) {
+      .sidebar { display: none; }
+      .chart-body { flex-direction: column; }
+      .chart-stats { flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); min-width: 0; }
+      .chart-stat { border-bottom: none; border-right: 1px solid var(--border); }
+      .chart-stat:last-child { border-right: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav>
+  <a href="index.html" class="nav-logo"><span>&gt;</span> ghcp-iac</a>
+  <span class="nav-divider">/</span>
+  <span class="nav-page">dashboard</span>
+  <div id="health-badge" title="Server health">
+    <div id="health-dot"></div>
+    <span id="health-text">connecting…</span>
+  </div>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="docs.html">Docs</a>
+    <a href="https://github.com/heisenberg-alt/ghcp-iac-workflow" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Agents</div>
+      <div id="agent-list">
+        <!-- populated by JS -->
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">History</div>
+      <div id="history-list">
+        <div class="history-empty">No runs yet</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <span class="toolbar-agent">Agent: <span id="toolbar-agent-name">—</span></span>
+      <textarea id="prompt-input" placeholder="Enter a prompt… e.g. Detect cloud drift" rows="1"
+        onkeydown="handleKey(event)"></textarea>
+      <button class="btn btn-run" id="run-btn" onclick="runAgent()" disabled>▶ Run</button>
+      <button class="btn btn-clear" onclick="clearOutput()">✕ Clear</button>
+    </div>
+
+    <!-- OUTPUT AREA -->
+    <div class="output-wrap" id="output-wrap">
+      <!-- CHART PANEL (auto-shown for drift agents) -->
+      <div id="chart-panel">
+        <div class="chart-panel-inner">
+          <div class="chart-panel-header">
+            <span class="chart-panel-title">Drift Overview</span>
+            <span style="margin-left:auto;font-size:10px" id="chart-subscription"></span>
+          </div>
+          <div class="chart-body">
+            <div class="chart-stats">
+              <div class="chart-stat">
+                <div class="chart-stat-val accent" id="cs-total">—</div>
+                <div class="chart-stat-label">Total Findings</div>
+              </div>
+              <div class="chart-stat">
+                <div class="chart-stat-val red" id="cs-unmanaged">—</div>
+                <div class="chart-stat-label">Unmanaged</div>
+              </div>
+              <div class="chart-stat">
+                <div class="chart-stat-val yellow" id="cs-orphaned">—</div>
+                <div class="chart-stat-label">Orphaned</div>
+              </div>
+              <div class="chart-stat">
+                <div class="chart-stat-val green" id="cs-managed">—</div>
+                <div class="chart-stat-label">State Resources</div>
+              </div>
+            </div>
+            <div class="chart-canvases">
+              <div class="chart-wrap">
+                <canvas id="chart-donut" width="150" height="150"></canvas>
+                <label>Findings Breakdown</label>
+              </div>
+              <div class="chart-wrap">
+                <canvas id="chart-bar" width="220" height="150"></canvas>
+                <label>Resource Coverage</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="output-placeholder" class="output-placeholder">
+        <div class="ph-icon">📡</div>
+        <p>Select an agent and enter a prompt to begin</p>
+        <span class="ph-hint">Results will stream here in real time</span>
+      </div>
+      <div id="output" style="display:none"></div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <div class="status-item" id="status-state">
+        <div class="dot"></div>
+        <span id="status-text">Ready</span>
+      </div>
+      <div class="status-item" id="status-timing" style="margin-left:auto">
+        <span id="status-duration"></span>
+      </div>
+      <div class="status-item">
+        <span id="status-agent-id" style="color:var(--border)"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── CONFIG ───────────────────────────────────────────────────────────────
+  const BASE = '';  // same origin
+
+  // ─── AGENT METADATA (fallback icons + default prompts if /agents is empty) ─
+  const AGENT_META = {
+    'orchestrator':  { icon: '🤖', prompt: 'Analyze this infrastructure for issues' },
+    'cloud-drift':   { icon: '☁️',  prompt: 'Detect cloud drift' },
+    'drift':         { icon: '🔄', prompt: 'Detect IaC drift' },
+    'security':      { icon: '🔒', prompt: 'Analyze security issues' },
+    'compliance':    { icon: '✅', prompt: 'Check compliance against CIS and NIST' },
+    'policy':        { icon: '📋', prompt: 'Check infrastructure policies' },
+    'cost':          { icon: '💰', prompt: 'Estimate monthly infrastructure costs' },
+    'deploy':        { icon: '🚀', prompt: 'Deploy infrastructure to dev environment' },
+    'impact':        { icon: '💥', prompt: 'Analyze blast radius and change impact' },
+    'module':        { icon: '📦', prompt: 'Analyze Terraform modules' },
+    'notification':  { icon: '🔔', prompt: 'Send deployment notification' },
+  };
+
+  // ─── STATE ────────────────────────────────────────────────────────────────
+  let selectedAgent = null;
+  let history = [];        // [{ agent, prompt, markdown, ts }]
+  let activeHistoryIdx = null;
+  let abortController = null;
+  let chartDonut = null;
+  let chartBar = null;
+
+  // ─── MARKED CONFIG ────────────────────────────────────────────────────────
+  marked.setOptions({ breaks: true, gfm: true });
+
+  // ─── HEALTH CHECK ─────────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${BASE}/health`);
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      document.getElementById('health-badge').className = 'ok';
+      document.getElementById('health-text').textContent =
+        `${d.service || 'ok'} · ${d.agents ?? '?'} agents`;
+    } catch {
+      document.getElementById('health-badge').className = 'err';
+      document.getElementById('health-text').textContent = 'offline';
+    }
+  }
+
+  // ─── AGENT LOADING ────────────────────────────────────────────────────────
+  async function loadAgents() {
+    let agents = [];
+    try {
+      const r = await fetch(`${BASE}/agents`);
+      if (r.ok) agents = await r.json();
+    } catch {}
+
+    // Fallback to known agents if endpoint not available
+    if (!agents || agents.length === 0) {
+      agents = Object.keys(AGENT_META).map(id => ({ id, name: id, description: '' }));
+    }
+
+    // Sort: orchestrator first, then alphabetical
+    agents.sort((a, b) => {
+      if (a.id === 'orchestrator') return -1;
+      if (b.id === 'orchestrator') return 1;
+      return a.id.localeCompare(b.id);
+    });
+
+    const list = document.getElementById('agent-list');
+    list.innerHTML = '';
+    for (const ag of agents) {
+      const meta = AGENT_META[ag.id] || { icon: '⚙️', prompt: '' };
+      const div = document.createElement('div');
+      div.className = 'agent-item';
+      div.dataset.id = ag.id;
+      div.dataset.prompt = meta.prompt;
+      div.title = ag.description || ag.name || ag.id;
+      div.innerHTML = `<span class="agent-icon">${meta.icon}</span><span class="agent-name">${ag.id}</span>`;
+      div.addEventListener('click', () => selectAgent(ag.id, meta.prompt));
+      list.appendChild(div);
+    }
+  }
+
+  // ─── SELECT AGENT ─────────────────────────────────────────────────────────
+  function selectAgent(id, defaultPrompt) {
+    selectedAgent = id;
+
+    document.querySelectorAll('.agent-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === id);
+    });
+
+    document.getElementById('toolbar-agent-name').textContent = id;
+    document.getElementById('status-agent-id').textContent = id;
+    document.getElementById('run-btn').disabled = false;
+
+    const input = document.getElementById('prompt-input');
+    if (!input.value.trim() && defaultPrompt) {
+      input.value = defaultPrompt;
+    }
+    input.focus();
+  }
+
+  // ─── RUN AGENT ────────────────────────────────────────────────────────────
+  async function runAgent() {
+    if (!selectedAgent) return;
+    const prompt = document.getElementById('prompt-input').value.trim();
+    if (!prompt) return;
+
+    // Cancel any in-flight run
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    // Show output area
+    document.getElementById('output-placeholder').style.display = 'none';
+    const outputEl = document.getElementById('output');
+    outputEl.style.display = 'block';
+    outputEl.innerHTML = '';
+
+    // Status
+    setStatus('running', 'Running…');
+    document.getElementById('run-btn').disabled = true;
+    const startTime = Date.now();
+
+    let accumulated = '';
+
+    try {
+      const resp = await fetch(`${BASE}/agent/${selectedAgent}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+        signal: abortController.signal,
+      });
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+
+        // Split on double-newline SSE event boundaries
+        const parts = sseBuffer.split('\n\n');
+        sseBuffer = parts.pop(); // keep any incomplete trailing event
+
+        for (const part of parts) {
+          const lines = part.split('\n');
+          let eventType = '';
+          let dataLine = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+            else if (line.startsWith('data: ')) dataLine = line.slice(6).trim();
+          }
+
+          if (eventType === 'copilot_done') break;
+
+          if (eventType === 'copilot_message' && dataLine && dataLine !== '{}') {
+            try {
+              const parsed = JSON.parse(dataLine);
+              const chunk = parsed?.choices?.[0]?.delta?.content;
+              if (chunk) {
+                accumulated += chunk;
+                // Re-render markdown with a streaming cursor
+                outputEl.innerHTML =
+                  `<div class="md-body">${marked.parse(accumulated)}</div>` +
+                  `<span class="stream-cursor"></span>`;
+                // Auto-scroll
+                const wrap = document.getElementById('output-wrap');
+                wrap.scrollTop = wrap.scrollHeight;
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      // Final render without cursor
+      outputEl.innerHTML = `<div class="md-body">${marked.parse(accumulated)}</div>`;
+      paginateTables(outputEl);
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      setStatus('done', `Done in ${elapsed}s`);
+      document.getElementById('status-duration').textContent = `${elapsed}s`;
+
+      // Render charts if drift data found
+      const driftStats = parseDriftSummary(accumulated);
+      if (driftStats) renderDriftCharts(driftStats, accumulated);
+      else hideCharts();
+
+      // Push to history
+      pushHistory(selectedAgent, prompt, accumulated, new Date());
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setStatus('', 'Cancelled');
+      } else {
+        outputEl.innerHTML = `<div class="md-body"><p><strong style="color:var(--red)">Error:</strong> ${escHtml(err.message)}</p></div>`;
+        setStatus('err', 'Error');
+      }
+    } finally {
+      document.getElementById('run-btn').disabled = false;
+      abortController = null;
+    }
+  }
+
+  // ─── HISTORY ──────────────────────────────────────────────────────────────
+  function pushHistory(agent, prompt, markdown, ts) {
+    history.unshift({ agent, prompt, markdown, ts });
+    if (history.length > 20) history.length = 20;
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('history-list');
+    if (history.length === 0) {
+      list.innerHTML = '<div class="history-empty">No runs yet</div>';
+      return;
+    }
+    list.innerHTML = '';
+    history.forEach((run, idx) => {
+      const div = document.createElement('div');
+      div.className = 'history-item' + (idx === activeHistoryIdx ? ' active' : '');
+      div.innerHTML = `
+        <div class="history-agent">${escHtml(run.agent)}</div>
+        <div class="history-prompt">${escHtml(run.prompt)}</div>
+        <div class="history-time">${fmtTime(run.ts)}</div>
+      `;
+      div.addEventListener('click', () => showHistoryRun(idx));
+      list.appendChild(div);
+    });
+  }
+
+  function showHistoryRun(idx) {
+    activeHistoryIdx = idx;
+    renderHistory();
+    const run = history[idx];
+
+    document.getElementById('output-placeholder').style.display = 'none';
+    const outputEl = document.getElementById('output');
+    outputEl.style.display = 'block';
+    outputEl.innerHTML = `<div class="md-body">${marked.parse(run.markdown)}</div>`;
+    paginateTables(outputEl);
+
+    selectAgent(run.agent, '');
+    document.getElementById('prompt-input').value = run.prompt;
+    setStatus('done', `Restored · ${fmtTime(run.ts)}`);
+
+    const driftStats = parseDriftSummary(run.markdown);
+    if (driftStats) renderDriftCharts(driftStats, run.markdown);
+    else hideCharts();
+  }
+
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
+  function clearOutput() {
+    activeHistoryIdx = null;
+    document.getElementById('output').style.display = 'none';
+    document.getElementById('output').innerHTML = '';
+    document.getElementById('output-placeholder').style.display = 'flex';
+    setStatus('', 'Ready');
+    document.getElementById('status-duration').textContent = '';
+    hideCharts();
+    if (abortController) { abortController.abort(); abortController = null; }
+  }
+
+  // ─── DRIFT CHART LOGIC ────────────────────────────────────────────────────
+
+  // Extract numbers from drift markdown output
+  function parseDriftSummary(md) {
+    const num = (pattern) => {
+      const m = md.match(pattern);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    const total = num(/Total drift findings[^\d]*(\d+)/);
+    if (!total && !md.includes('drift')) return null;
+    return {
+      stateResources:  num(/State file resources[^\d]*(\d+)/),
+      azureResources:  num(/Azure resources found[^\d]*(\d+)/),
+      totalFindings:   total,
+      unmanaged:       num(/Unmanaged resources[^\d]*(\d+)/),
+      orphaned:        num(/Orphaned state entries[^\d]*(\d+)/),
+      configDrift:     num(/Configuration drift[^\d]*(\d+)/),
+      subscription:    (md.match(/Subscription[^`]*`([^`]+)`/) || [])[1] || '',
+    };
+  }
+
+  function renderDriftCharts(s, md) {
+    document.getElementById('chart-panel').style.display = 'block';
+
+    // Stat cards
+    document.getElementById('cs-total').textContent     = s.totalFindings;
+    document.getElementById('cs-unmanaged').textContent = s.unmanaged;
+    document.getElementById('cs-orphaned').textContent  = s.orphaned;
+    document.getElementById('cs-managed').textContent   = s.stateResources;
+    document.getElementById('chart-subscription').textContent =
+      s.subscription ? `Sub: ${s.subscription.slice(0,8)}…` : '';
+
+    const C = Chart.defaults;
+    C.color = '#8b949e';
+    C.font.family = "'JetBrains Mono', monospace";
+    C.font.size = 11;
+
+    const commonOpts = {
+      responsive: false,
+      animation: { duration: 600, easing: 'easeOutQuart' },
+      plugins: { legend: { display: false }, tooltip: { callbacks: {} } },
+    };
+
+    // ── Donut: findings breakdown
+    const donutCtx = document.getElementById('chart-donut').getContext('2d');
+    if (chartDonut) chartDonut.destroy();
+
+    const donutData = [];
+    const donutLabels = [];
+    const donutColors = [];
+    if (s.unmanaged)   { donutData.push(s.unmanaged);   donutLabels.push('Unmanaged');    donutColors.push('#f85149'); }
+    if (s.orphaned)    { donutData.push(s.orphaned);    donutLabels.push('Orphaned');      donutColors.push('#d29922'); }
+    if (s.configDrift) { donutData.push(s.configDrift); donutLabels.push('Config Drift');  donutColors.push('#e3932b'); }
+    // Fallback if all zero but totalFindings > 0
+    if (donutData.length === 0 && s.totalFindings > 0) {
+      donutData.push(s.totalFindings);
+      donutLabels.push('Findings');
+      donutColors.push('#58a6ff');
+    }
+
+    chartDonut = new Chart(donutCtx, {
+      type: 'doughnut',
+      data: {
+        labels: donutLabels,
+        datasets: [{
+          data: donutData,
+          backgroundColor: donutColors,
+          borderColor: '#161b22',
+          borderWidth: 2,
+          hoverOffset: 6,
+        }]
+      },
+      options: {
+        ...commonOpts,
+        cutout: '60%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed / s.totalFindings * 100)}%)`
+            }
+          }
+        }
+      }
+    });
+
+    // ── Bar: resource coverage
+    const barCtx = document.getElementById('chart-bar').getContext('2d');
+    if (chartBar) chartBar.destroy();
+
+    const managed = Math.max(0, s.stateResources - s.orphaned);
+    chartBar = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Azure\nResources', 'In State', 'Unmanaged', 'Orphaned'],
+        datasets: [{
+          data: [s.azureResources, s.stateResources, s.unmanaged, s.orphaned],
+          backgroundColor: ['#58a6ff', '#3fb950', '#f85149', '#d29922'],
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        ...commonOpts,
+        scales: {
+          x: {
+            grid: { color: '#30363d' },
+            ticks: { color: '#8b949e', font: { size: 10 } },
+          },
+          y: {
+            grid: { color: '#30363d' },
+            ticks: { color: '#8b949e', font: { size: 10 }, precision: 0 },
+            beginAtZero: true,
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y}` } }
+        }
+      }
+    });
+  }
+
+  function hideCharts() {
+    document.getElementById('chart-panel').style.display = 'none';
+    if (chartDonut) { chartDonut.destroy(); chartDonut = null; }
+    if (chartBar)   { chartBar.destroy();   chartBar = null; }
+  }
+
+  // ─── TABLE PAGINATION ────────────────────────────────────────────────────
+  function paginateTables(container) {
+    const DEFAULT_PAGE_SIZE = 15;
+
+    container.querySelectorAll('table').forEach((table, tIdx) => {
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      const allRows = Array.from(tbody.querySelectorAll('tr'));
+      if (allRows.length === 0) return;
+
+      // Extract all rows from live DOM so we own them
+      tbody.innerHTML = '';
+
+      let pageSize = DEFAULT_PAGE_SIZE;
+      let currentPage = 0;
+      const totalPages = () => Math.ceil(allRows.length / pageSize);
+
+      // Wrap table
+      const wrap = document.createElement('div');
+      wrap.className = 'pg-wrap';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+
+      // Build footer
+      const footer = document.createElement('div');
+      footer.className = 'pg-footer';
+
+      const infoEl = document.createElement('span');
+      infoEl.className = 'pg-info';
+
+      const controls = document.createElement('div');
+      controls.className = 'pg-controls';
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'pg-btn';
+      prevBtn.textContent = '← Prev';
+
+      const pagesEl = document.createElement('span');
+      pagesEl.className = 'pg-pages';
+
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'pg-btn';
+      nextBtn.textContent = 'Next →';
+
+      const sizeLabel = document.createElement('span');
+      sizeLabel.style.cssText = 'font-size:11px;color:var(--text-dim);margin-left:8px';
+      sizeLabel.textContent = 'Rows:';
+
+      const sizeSelect = document.createElement('select');
+      sizeSelect.className = 'pg-size';
+      [10, 15, 25, 50].forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        if (n === DEFAULT_PAGE_SIZE) opt.selected = true;
+        sizeSelect.appendChild(opt);
+      });
+
+      controls.append(prevBtn, pagesEl, nextBtn, sizeLabel, sizeSelect);
+      footer.append(infoEl, controls);
+      wrap.appendChild(footer);
+
+      function renderPage(page) {
+        currentPage = Math.max(0, Math.min(page, totalPages() - 1));
+        const start = currentPage * pageSize;
+        const end = Math.min(start + pageSize, allRows.length);
+        tbody.innerHTML = '';
+        for (let i = start; i < end; i++) {
+          tbody.appendChild(allRows[i].cloneNode(true));
+        }
+        infoEl.textContent = `Rows ${start + 1}–${end} of ${allRows.length}`;
+        pagesEl.textContent = `Page ${currentPage + 1} / ${totalPages()}`;
+        prevBtn.disabled = currentPage === 0;
+        nextBtn.disabled = currentPage >= totalPages() - 1;
+      }
+
+      prevBtn.addEventListener('click', () => renderPage(currentPage - 1));
+      nextBtn.addEventListener('click', () => renderPage(currentPage + 1));
+      sizeSelect.addEventListener('change', () => {
+        pageSize = parseInt(sizeSelect.value, 10);
+        renderPage(0);
+      });
+
+      renderPage(0);
+    });
+  }
+
+  function setStatus(cls, text) {
+    const el = document.getElementById('status-state');
+    el.className = 'status-item' + (cls ? ` ${cls}` : '');
+    document.getElementById('status-text').textContent = text;
+  }
+
+  function handleKey(e) {
+    // Ctrl+Enter or Cmd+Enter to run
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      runAgent();
+    }
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fmtTime(d) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  // ─── INIT ─────────────────────────────────────────────────────────────────
+  (async () => {
+    await Promise.all([checkHealth(), loadAgents()]);
+    // Poll health every 15s
+    setInterval(checkHealth, 15_000);
+  })();
+</script>
+</body>
+</html>

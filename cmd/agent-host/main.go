@@ -89,6 +89,12 @@ func main() {
 func runHTTP(cfg *config.Config, registry *host.Registry, dispatcher *host.Dispatcher) {
 	mux := http.NewServeMux()
 
+	// Dashboard — serve the docs/ directory as static files
+	mux.Handle("GET /ui/", http.StripPrefix("/ui/", http.FileServer(http.Dir("docs"))))
+	mux.HandleFunc("GET /dashboard", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ui/dashboard.html", http.StatusFound)
+	})
+
 	// Agent endpoint — uses orchestrator as default
 	mux.HandleFunc("POST /agent", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxBodySize)
