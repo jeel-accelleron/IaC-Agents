@@ -52,6 +52,20 @@ type Config struct {
 	AzureClientID       string `json:"-"`
 	AzureClientSecret   string `json:"-"`
 
+	// Terraform State Backend Configuration (for Cloud Drift Agent)
+	TFStateBackendType       string `json:"tf_state_backend_type"`       // azureblob, s3, local
+	TFStateBackendConnection string `json:"tf_state_backend_connection"` // Connection string or path
+	TFStateBackendCredential string `json:"-"`                           // SAS token, access key, etc.
+	TFStateContainer         string `json:"tf_state_container"`          // Container/bucket name
+	TFStateKey               string `json:"tf_state_key"`                // State file path
+	TFStateScanAll           bool   `json:"tf_state_scan_all"`           // Scan all .tfstate files in container
+
+	// Cloud Drift Detection Scope
+	DriftScopeResourceGroups []string          `json:"drift_scope_resource_groups"`
+	DriftScopeTags           map[string]string `json:"drift_scope_tags"`
+	DriftScopeResourceTypes  []string          `json:"drift_scope_resource_types"`
+	DriftTypes               []string          `json:"drift_types"` // unmanaged, orphaned, config
+
 	// Notifications
 	TeamsWebhookURL string `json:"-"`
 	SlackWebhookURL string `json:"-"`
@@ -91,6 +105,20 @@ func Load() *Config {
 		AzureTenantID:       os.Getenv("AZURE_TENANT_ID"),
 		AzureClientID:       os.Getenv("AZURE_CLIENT_ID"),
 		AzureClientSecret:   os.Getenv("AZURE_CLIENT_SECRET"),
+
+		// Terraform State Backend
+		TFStateBackendType:       getEnv("TF_STATE_BACKEND_TYPE", "local"),
+		TFStateBackendConnection: os.Getenv("TF_STATE_BACKEND_CONNECTION"),
+		TFStateBackendCredential: os.Getenv("TF_STATE_BACKEND_CREDENTIAL"),
+		TFStateContainer:         getEnv("TF_STATE_CONTAINER", "tfstate"),
+		TFStateKey:               getEnv("TF_STATE_KEY", "terraform.tfstate"),
+		TFStateScanAll:           getBoolEnv("TF_STATE_SCAN_ALL", false),
+
+		// Cloud Drift Scope
+		DriftScopeResourceGroups: splitEnv("DRIFT_SCOPE_RESOURCE_GROUPS", ","),
+		DriftScopeTags:           parseTagsEnv("DRIFT_SCOPE_TAGS"),
+		DriftScopeResourceTypes:  splitEnv("DRIFT_SCOPE_RESOURCE_TYPES", ","),
+		DriftTypes:               splitEnv("DRIFT_TYPES", ","),
 
 		TeamsWebhookURL: os.Getenv("TEAMS_WEBHOOK_URL"),
 		SlackWebhookURL: os.Getenv("SLACK_WEBHOOK_URL"),
@@ -186,4 +214,37 @@ func getDurationEnv(key string, defaultVal time.Duration) time.Duration {
 		}
 	}
 	return defaultVal
+}
+
+func splitEnv(key, separator string) []string {
+	if val := os.Getenv(key); val != "" {
+		parts := strings.Split(val, separator)
+		result := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+func parseTagsEnv(key string) map[string]string {
+	tags := make(map[string]string)
+	if val := os.Getenv(key); val != "" {
+		// Format: "key1=value1,key2=value2"
+		pairs := strings.Split(val, ",")
+		for _, pair := range pairs {
+			kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+			if len(kv) == 2 {
+				tags[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+			} else if len(kv) == 1 && kv[0] != "" {
+				// Tag key only, no value
+				tags[strings.TrimSpace(kv[0])] = ""
+			}
+		}
+	}
+	return tags
 }

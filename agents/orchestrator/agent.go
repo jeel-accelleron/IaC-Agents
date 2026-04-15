@@ -18,10 +18,11 @@ var codeBlockRe = regexp.MustCompile("(?s)```.*?```")
 type Intent string
 
 const (
-	IntentAnalyze Intent = "analyze"
-	IntentCost    Intent = "cost"
-	IntentOps     Intent = "ops"
-	IntentHelp    Intent = "help"
+	IntentAnalyze    Intent = "analyze"
+	IntentCost       Intent = "cost"
+	IntentCloudDrift Intent = "cloud-drift"
+	IntentOps        Intent = "ops"
+	IntentHelp       Intent = "help"
 )
 
 // AgentLookup returns a registered agent by ID.
@@ -201,6 +202,7 @@ func classifyKeywords(message string) Intent {
 	}{
 		{IntentAnalyze, []string{"scan", "audit", "review", "analyze", "security", "policy", "compliance", "vulnerability", "check", "full"}},
 		{IntentCost, []string{"cost", "price", "pricing", "estimate", "budget", "expensive", "spending"}},
+		{IntentCloudDrift, []string{"cloud drift", "unmanaged", "orphaned", "resources not in state", "manual changes", "state vs cloud", "configuration drift"}},
 		{IntentOps, []string{"deploy", "promote", "drift", "release", "rollback", "environment", "staging", "production", "notify", "notification"}},
 		{IntentHelp, []string{"help", "how to", "what can", "usage", "guide", "capabilities", "status", "health"}},
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/cost"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/deploy"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/drift"
+	"github.com/ghcp-iac/ghcp-iac-workflow/agents/cloud-drift"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/impact"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/module"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/notification"
@@ -60,6 +61,7 @@ func main() {
 	registry.Register(compliance.New(compliance.WithLLM(llmClient)))
 	registry.Register(cost.New(cost.WithLLM(llmClient)))
 	registry.Register(drift.New())
+	registry.Register(clouddrift.NewAgent(cfg))
 	registry.Register(deploy.New())
 	registry.Register(notification.New(cfg.EnableNotifications))
 	registry.Register(impact.New(impact.WithLLM(llmClient)))
