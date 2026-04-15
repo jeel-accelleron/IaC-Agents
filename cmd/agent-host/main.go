@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
+	clouddrift "github.com/ghcp-iac/ghcp-iac-workflow/agents/cloud-drift"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/compliance"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/cost"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/deploy"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/drift"
-	"github.com/ghcp-iac/ghcp-iac-workflow/agents/cloud-drift"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/impact"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/module"
 	"github.com/ghcp-iac/ghcp-iac-workflow/agents/notification"
@@ -98,8 +98,8 @@ func runHTTP(cfg *config.Config, registry *host.Registry, dispatcher *host.Dispa
 			return
 		}
 
-		sse := server.NewSSEWriter(w)
-		if sse == nil {
+		emitter := newEmitter(w, r)
+		if emitter == nil {
 			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 			return
 		}
@@ -117,10 +117,10 @@ func runHTTP(cfg *config.Config, registry *host.Registry, dispatcher *host.Dispa
 		ctx, cancel := context.WithTimeout(r.Context(), cfg.AgentTimeout)
 		defer cancel()
 
-		if err := dispatcher.Dispatch(ctx, "", agentReq, sse); err != nil {
-			sse.SendError(err.Error())
+		if err := dispatcher.Dispatch(ctx, "", agentReq, emitter); err != nil {
+			emitter.SendError(err.Error())
 		}
-		sse.SendDone()
+		emitter.SendDone()
 	})
 
 	// Specific agent endpoint
@@ -134,8 +134,8 @@ func runHTTP(cfg *config.Config, registry *host.Registry, dispatcher *host.Dispa
 			return
 		}
 
-		sse := server.NewSSEWriter(w)
-		if sse == nil {
+		emitter := newEmitter(w, r)
+		if emitter == nil {
 			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 			return
 		}
@@ -153,10 +153,10 @@ func runHTTP(cfg *config.Config, registry *host.Registry, dispatcher *host.Dispa
 		ctx, cancel := context.WithTimeout(r.Context(), cfg.AgentTimeout)
 		defer cancel()
 
-		if err := dispatcher.Dispatch(ctx, agentID, agentReq, sse); err != nil {
-			sse.SendError(err.Error())
+		if err := dispatcher.Dispatch(ctx, agentID, agentReq, emitter); err != nil {
+			emitter.SendError(err.Error())
 		}
-		sse.SendDone()
+		emitter.SendDone()
 	})
 
 	// Agent listing
@@ -221,4 +221,18 @@ func runStdio(registry *host.Registry, dispatcher *host.Dispatcher) {
 	if err := adapter.Run(context.Background()); err != nil {
 		log.Fatalf("MCP stdio error: %v", err)
 	}
+}
+
+// newEmitter returns a PlainWriter when the client requests plain text
+// (Accept: text/plain header or ?format=plain query param), and an
+// SSEWriter otherwise. Returns nil if SSE is requested but not supported.
+func newEmitter(w http.ResponseWriter, r *http.Request) protocol.Emitter {
+	if r.URL.Query().Get("format") == "plain" || r.Header.Get("Accept") == "text/plain" {
+		return server.NewPlainWriter(w)
+	}
+	sse := server.NewSSEWriter(w)
+	if sse == nil {
+		return nil
+	}
+	return sse
 }
