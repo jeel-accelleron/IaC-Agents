@@ -31,3 +31,7 @@ Thumbs.db
 coverage.out
 coverage.html
 linkedin-post.md
+
+# env files
+.env
+.env.local
